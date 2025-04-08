@@ -60,6 +60,14 @@ public class ServerConnectivityManager: BaseConnectivityManager {
             }
         }
     }
+    
+    public func kickPeers(_ peerIds: [MCPeerID]) throws {
+        try self.send(DataObject<String>.kickRequest, toPeers: peerIds)
+    }
+    
+    public func kickPeer(_ peerId: MCPeerID) throws {
+        try self.kickPeers([peerId])
+    }
 }
 
 extension ServerConnectivityManager: MCNearbyServiceAdvertiserDelegate {

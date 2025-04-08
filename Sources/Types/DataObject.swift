@@ -22,3 +22,13 @@ public struct DataObject<Content: Codable>: Codable, Identifiable, Equatable {
         return lhs.id == rhs.id
     }
 }
+
+extension DataObject {
+    static var kickRequest: DataObject<String> {
+        DataObject<String>(id: UUID(uuidString: "d15c0000-0000-0000-0000-000000000000")!, content: "FORCE_DISCONNECT")
+    }
+    
+    var isKickRequest: Bool {
+        DataObject.kickRequest.content == content as? String
+    }
+}

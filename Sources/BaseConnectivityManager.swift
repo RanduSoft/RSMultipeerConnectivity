@@ -52,19 +52,34 @@ public class BaseConnectivityManager: NSObject, ObservableObject {
         fatalError("Override this method")
     }
     
-    public func send<Content: Codable>(_ object: DataObject<Content>) throws {
+    public func send<Content: Codable>(_ object: DataObject<Content>, toPeers peerIds: [MCPeerID]) throws {
         do {
             let data = try JSONEncoder().encode(object)
-            try session.send(data, toPeers: session.connectedPeers, with: .reliable)
+            try session.send(data, toPeers: peerIds, with: .reliable)
         } catch {
             throw ConnectivityError.sendFailed(error)
         }
     }
     
+    public func send<Content: Codable>(_ object: DataObject<Content>) throws {
+        try self.send(object, toPeers: session.connectedPeers)
+    }
+    
+    public func send<Content: Codable>(_ object: DataObject<Content>, toPeer peerId: MCPeerID) throws {
+        try self.send(object, toPeers: [peerId])
+    }
+    
     public func receive<Content: Codable>(_ type: Content.Type, completion: @escaping (DataObjectPayload<Content>) -> Void) {
-        onReceive = { peerPayload in
+        onReceive = { [weak self] peerPayload in
             do {
                 let dataObject = try JSONDecoder().decode(DataObject<Content>.self, from: peerPayload.data)
+                
+                if dataObject.isKickRequest {
+                    Logger.log("Received kick request, will disconnect", type: .info)
+                    (self as? ClientConnectivityManager)?.disconnectFromServer()
+                    return
+                }
+                
                 DispatchQueue.main.async {
                     completion((dataObject, peerPayload.peerId))
                 }
