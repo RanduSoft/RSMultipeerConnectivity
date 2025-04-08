@@ -13,6 +13,7 @@ public class ClientConnectivityManager: BaseConnectivityManager {
     @Published public var connectionState: MCSessionState = .notConnected
     
     public var onConnectionStateChange: ((Bool) -> Void)?
+    public var onServerReject: ((String) -> Void)?
     
     private let serviceBrowser: MCNearbyServiceBrowser
     
@@ -45,7 +46,15 @@ public class ClientConnectivityManager: BaseConnectivityManager {
     
     public override func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         DispatchQueue.main.async {
-            self.connectionState = state
+            let oldState = self.connectionState
+            let newState = state
+            
+            self.connectionState = newState
+            
+            if oldState == .notConnected && newState == .notConnected {
+                self.onServerReject?("Server rejected this client")
+                return
+            }
             
             switch state {
                 case .connected:
