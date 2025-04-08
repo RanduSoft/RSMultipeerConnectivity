@@ -9,13 +9,13 @@ import SwiftUI
 
 #if os(iOS)
 
-public struct DebugView<Content: Codable>: View {
+struct DebugView<Content: Codable>: View {
     @StateObject private var manager: BaseConnectivityManager
     
     @State private var inputText: String = ""
     @State private var receivedObject: DataObject<Content>?
     
-    public init(displayName: String, role: BaseConnectivityManager.PeerRole, config: Config = Config(enableLogging: true)) {
+    init(displayName: String, role: BaseConnectivityManager.PeerRole, config: Config = Config(enableLogging: true)) {
         let manager: BaseConnectivityManager = role == .server
         ? ServerConnectivityManager(displayName: displayName, config: config)
         : ClientConnectivityManager(displayName: displayName, config: config)
@@ -23,7 +23,7 @@ public struct DebugView<Content: Codable>: View {
         _manager = StateObject(wrappedValue: manager)
     }
     
-    public var body: some View {
+    var body: some View {
         Group {
             if let serverManager = manager as? ServerConnectivityManager {
                 serverView(manager: serverManager)
@@ -142,6 +142,5 @@ public struct DebugView<Content: Codable>: View {
         }.padding(.bottom, 20)
     }.ignoresSafeArea(edges: .bottom)
 }
-
 
 #endif

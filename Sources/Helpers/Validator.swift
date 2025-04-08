@@ -6,7 +6,7 @@
 //
 
 public struct Validator {
-    static func peerDisplayNameIsValid(_ displayName: String) -> Bool {
+    public static func peerDisplayNameIsValid(_ displayName: String) -> Bool {
         guard !displayName.isEmpty && !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return false
         }
