@@ -24,6 +24,10 @@ public class BaseConnectivityManager: NSObject, ObservableObject {
         self.config = config
         Logger.enableLogging = config.enableLogging
         
+        guard Validator.peerDisplayNameIsValid(displayName) else {
+            fatalError("Invalid peer display name, make sure its under 63 bytes, not empty or contain only whitespaces")
+        }
+        
         self.myPeerId = MCPeerID(displayName: displayName)
         self.session = MCSession(peer: myPeerId, securityIdentity: nil, encryptionPreference: .required)
         super.init()
