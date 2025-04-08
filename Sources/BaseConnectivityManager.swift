@@ -72,13 +72,13 @@ public class BaseConnectivityManager: NSObject, ObservableObject {
     public func receive<Content: Codable>(_ type: Content.Type, completion: @escaping (DataObjectPayload<Content>) -> Void) {
         onReceive = { [weak self] peerPayload in
             do {
-                let dataObject = try JSONDecoder().decode(DataObject<Content>.self, from: peerPayload.data)
-                
-                if dataObject.isKickRequest {
+                if let kickDataObject = try? JSONDecoder().decode(DataObject<String>.self, from: peerPayload.data), kickDataObject.isKickRequest {
                     Logger.log("Received kick request, will disconnect", type: .info)
                     (self as? ClientConnectivityManager)?.disconnectFromServer()
                     return
                 }
+                
+                let dataObject = try JSONDecoder().decode(DataObject<Content>.self, from: peerPayload.data)
                 
                 DispatchQueue.main.async {
                     completion((dataObject, peerPayload.peerId))
