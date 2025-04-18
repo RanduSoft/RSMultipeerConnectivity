@@ -40,8 +40,8 @@ public struct DebugView<Content: Codable>: View {
                 serverManager.onPeerDisconnected = { peerId in
                     Logger.log("\(peerId.displayName) disconnected from \(serverManager.displayName)", type: .connection, function: "onPeerDisconnected")
                 }
-                serverManager.onPeerRejected = { peerId in
-                    Logger.log("\(peerId.displayName) rejected from connecting to \(serverManager.displayName)", type: .connection, function: "onPeerRejected")
+                serverManager.onPeerRejected = { peerId, reason in
+                    Logger.log("\(peerId.displayName) rejected from connecting to \(serverManager.displayName) due to \(reason ?? "NONE")", type: .connection, function: "onPeerRejected")
                 }
                 serverManager.invitationValidator = { peerId, deviceDetails in
                     Logger.log("\(peerId.displayName) with device details \(deviceDetails) invited to connect to \(serverManager.displayName)", type: .connection, function: "invitationValidator")
