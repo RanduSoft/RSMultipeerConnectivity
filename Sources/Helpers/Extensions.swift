@@ -13,3 +13,13 @@ public extension MCPeerID {
         self.displayName.replacingOccurrences(of: "\\s*\\[.*?\\]\\s*$", with: "", options: .regularExpression)
     }
 }
+
+extension String {
+    static var kickRequest: String {
+        "FORCE_DISCONNECT"
+    }
+    
+    var isKickRequest: Bool {
+        self == String.kickRequest
+    }
+}

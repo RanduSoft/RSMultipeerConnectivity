@@ -9,13 +9,15 @@ import SwiftUI
 
 #if os(iOS)
 
-struct DebugView<Content: Codable>: View {
+public struct DebugView<Content: Codable>: View {
     @StateObject private var manager: BaseConnectivityManager
     
     @State private var inputText: String = ""
     @State private var receivedObject: DataObject<Content>?
     
-    init(displayName: String, role: BaseConnectivityManager.PeerRole, config: Config = Config(enableLogging: true)) {
+    @State private var errorMessage: String?
+    
+    public init(displayName: String, role: BaseConnectivityManager.PeerRole, config: Config = Config(enableLogging: true)) {
         let manager: BaseConnectivityManager = role == .server
         ? ServerConnectivityManager(displayName: displayName, config: config)
         : ClientConnectivityManager(displayName: displayName, config: config)
@@ -23,7 +25,7 @@ struct DebugView<Content: Codable>: View {
         _manager = StateObject(wrappedValue: manager)
     }
     
-    var body: some View {
+    public var body: some View {
         Group {
             if let serverManager = manager as? ServerConnectivityManager {
                 serverView(manager: serverManager)
@@ -38,9 +40,19 @@ struct DebugView<Content: Codable>: View {
                 serverManager.onPeerDisconnected = { peerId in
                     Logger.log("\(peerId.displayName) disconnected from \(serverManager.displayName)", type: .connection, function: "onPeerDisconnected")
                 }
+                serverManager.onPeerRejected = { peerId in
+                    Logger.log("\(peerId.displayName) rejected from connecting to \(serverManager.displayName)", type: .connection, function: "onPeerRejected")
+                }
+                serverManager.invitationValidator = { peerId, deviceDetails in
+                    Logger.log("\(peerId.displayName) with device details \(deviceDetails) invited to connect to \(serverManager.displayName)", type: .connection, function: "invitationValidator")
+                    return ServerHandshakeResponse(allowed: true)
+                }
             } else if let clientManager = manager as? ClientConnectivityManager {
                 clientManager.onConnectionStateChange = { isConnected in
                     Logger.log("\(clientManager.displayName) \(isConnected ? "connected to" : "disconnected from") server", type: .connection, function: "onConnectionStateChange")
+                }
+                clientManager.onKick = { reason in
+                    Logger.log("Got kicked with reason: \(reason ?? "none")", type: .connection, function: "onKick")
                 }
             }
             manager.receive(Content.self) { peerPayload in
@@ -107,7 +119,11 @@ struct DebugView<Content: Codable>: View {
                     
                     List(manager.availablePeers, id: \.self) { peer in
                         Button(peer.displayName) {
-                            manager.connectToServer(peer)
+                            do {
+                                try manager.connectToServer(peer)
+                            } catch {
+                                errorMessage = error.localizedDescription
+                            }
                         }
                     }.listStyle(.insetGrouped).padding(-20)
                 @unknown default:

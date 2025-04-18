@@ -2,9 +2,8 @@
 //  RSMultipeerConnectivity
 //
 //  Created by Radu Ursache - RanduSoft
-//  Version: 1.0.0
+//  Version: 1.1.0
 //
-
 
 import SwiftUI
 import MultipeerConnectivity
@@ -17,7 +16,11 @@ public class ServerConnectivityManager: BaseConnectivityManager {
     public var onPeerDisconnected: ((MCPeerID) -> Void)?
     public var onPeerRejected: ((MCPeerID) -> Void)?
     
+    public var invitationValidator: ((MCPeerID, ClientHandshakeRequest) -> ServerHandshakeResponse)?
+    
     private let serviceAdvertiser: MCNearbyServiceAdvertiser
+    
+    
     private var validClientVersions: [String] = []
     
     public override init(displayName: String, config: Config = Config()) {
@@ -61,12 +64,12 @@ public class ServerConnectivityManager: BaseConnectivityManager {
         }
     }
     
-    public func kickPeers(_ peerIds: [MCPeerID]) throws {
-        try self.send(DataObject<String>.kickRequest, toPeers: peerIds)
+    public func kickPeers(_ peerIds: [MCPeerID], forReason reason: String? = nil) throws {
+        try self.send(KickRequest(reason: reason), toPeers: peerIds)
     }
     
-    public func kickPeer(_ peerId: MCPeerID) throws {
-        try self.kickPeers([peerId])
+    public func kickPeer(_ peerId: MCPeerID, forReason reason: String? = nil) throws {
+        try self.kickPeers([peerId], forReason: reason)
     }
 }
 
@@ -74,19 +77,22 @@ extension ServerConnectivityManager: MCNearbyServiceAdvertiserDelegate {
     public func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         Logger.log("\(self.displayName) received invitation from: \(peerID.displayName)", type: .info)
         
-        if validClientVersions.isEmpty {
-            invitationHandler(true, session) ; return
-        }
+        invitationHandler(true, session)
         
-        guard let peerVersionString = versionFromDisplayName(peerID.displayName), validClientVersions.contains(peerVersionString) else {
-            Logger.log("\(self.displayName) rejected invitation from: \(peerID.displayName) due to incompatible version", type: .error)
-            
-            self.onPeerRejected?(peerID)
-            invitationHandler(false, session)
+        guard let context, let clientHandshakeRequest = try? JSONDecoder().decode(ClientHandshakeRequest.self, from: context) else {
             return
         }
         
-        invitationHandler(true, session)
+        guard let serverResponse = self.invitationValidator?(peerID, clientHandshakeRequest) else {
+            Logger.log("\(self.displayName) failed to decode serverResponse from: \(peerID.displayName)", type: .error)
+            return
+        }
+        
+        if serverResponse.allowed == false {
+            try? self.kickPeer(peerID, forReason: serverResponse.reason)
+            
+            Logger.log("\(self.displayName) kicked \(peerID.displayName) due to \(serverResponse.reason ?? "unknown"))", type: .connection)
+        }
     }
 }
 

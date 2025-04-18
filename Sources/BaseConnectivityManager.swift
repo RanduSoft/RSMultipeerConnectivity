@@ -2,7 +2,7 @@
 //  RSMultipeerConnectivity
 //
 //  Created by Radu Ursache - RanduSoft
-//  Version: 1.0.0
+//  Version: 1.1.0
 //
 
 import SwiftUI
@@ -17,6 +17,10 @@ public class BaseConnectivityManager: NSObject, ObservableObject {
     public var displayName: String {
         myPeerId.displayName
     }
+    
+    public var onReceiveData: ((PeerPayload) -> Void)?
+    
+    private var typedHandlers: [UUID: (PeerPayload) -> Void] = [:]
     
     let session: MCSession
     
@@ -52,47 +56,69 @@ public class BaseConnectivityManager: NSObject, ObservableObject {
         fatalError("Override this method")
     }
     
-    public func send<Content: Codable>(_ object: DataObject<Content>, toPeers peerIds: [MCPeerID]) throws {
+    public func send<T: Codable>(_ object: T, toPeers peerIds: [MCPeerID]? = nil) throws {
+        let targets = peerIds ?? session.connectedPeers
+        
+        guard targets.isEmpty == false else {
+            throw ConnectivityError.sendFailed(ConnectivityError.noPeersConnected)
+        }
+        
         do {
             let data = try JSONEncoder().encode(object)
-            try session.send(data, toPeers: peerIds, with: .reliable)
+            try session.send(data, toPeers: targets, with: .reliable)
         } catch {
             throw ConnectivityError.sendFailed(error)
         }
     }
     
-    public func send<Content: Codable>(_ object: DataObject<Content>) throws {
-        try self.send(object, toPeers: session.connectedPeers)
+    public func send<T: Codable>(_ object: T, toPeer peerId: MCPeerID) throws {
+        try send(object, toPeers: [peerId])
     }
     
-    public func send<Content: Codable>(_ object: DataObject<Content>, toPeer peerId: MCPeerID) throws {
-        try self.send(object, toPeers: [peerId])
-    }
-    
-    public func receive<Content: Codable>(_ type: Content.Type, completion: @escaping (DataObjectPayload<Content>) -> Void) {
-        onReceive = { [weak self] peerPayload in
+    @discardableResult
+    public func receive<Content: Codable>(_ type: Content.Type = Content.self, completion: @escaping (DataObjectPayload<Content>) -> Void) -> UUID {
+        let id = UUID()
+        let wrapper: (PeerPayload) -> Void = { payload in
             do {
-                if let kickDataObject = try? JSONDecoder().decode(DataObject<String>.self, from: peerPayload.data), kickDataObject.isKickRequest {
-                    Logger.log("Received kick request, will disconnect", type: .info)
-                    (self as? ClientConnectivityManager)?.disconnectFromServer()
-                    return
-                }
-                
-                let dataObject = try JSONDecoder().decode(DataObject<Content>.self, from: peerPayload.data)
-                
+                let dataObject = try JSONDecoder().decode(DataObject<Content>.self, from: payload.data)
                 DispatchQueue.main.async {
-                    completion((dataObject, peerPayload.peerId))
+                    completion((dataObject, payload.peerId))
                 }
             } catch {
                 Logger.log(String(describing: error), type: .error)
             }
+        }
+        typedHandlers[id] = wrapper
+        return id
+    }
+    
+    public func cancelReceive(id: UUID) {
+        typedHandlers.removeValue(forKey: id)
+    }
+    
+    private func processReceivedData(_ payload: PeerPayload) {
+        if let kickData = try? JSONDecoder().decode(KickRequest.self, from: payload.data) {
+            Logger.log("Received kick request, will disconnect. Reason: \(kickData.reason ?? "NONE")", type: .info)
+            
+            DispatchQueue.main.async {
+                (self as? ClientConnectivityManager)?.disconnectFromServer()
+                (self as? ClientConnectivityManager)?.onKick?(kickData.reason)
+            } ; return
+        }
+        
+        DispatchQueue.main.async {
+            self.onReceiveData?(payload)
+        }
+        
+        for handler in typedHandlers.values {
+            handler(payload)
         }
     }
 }
 
 extension BaseConnectivityManager: MCSessionDelegate {
     public func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        onReceive?((data, peerID))
+        processReceivedData((data, peerID))
     }
     
     public func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {}

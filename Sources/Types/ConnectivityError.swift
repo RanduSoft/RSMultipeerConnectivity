@@ -13,6 +13,7 @@ public enum ConnectivityError: Error {
     
     case sendFailed(Error)
     case invalidData(Error)
+    case noPeersConnected
     
     case connectionLost
 }

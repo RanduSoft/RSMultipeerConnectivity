@@ -13,7 +13,7 @@ public class ClientConnectivityManager: BaseConnectivityManager {
     @Published public var connectionState: MCSessionState = .notConnected
     
     public var onConnectionStateChange: ((Bool) -> Void)?
-    public var onServerReject: ((String) -> Void)?
+    public var onKick: ((String?) -> Void)?
     
     private let serviceBrowser: MCNearbyServiceBrowser
     
@@ -36,8 +36,10 @@ public class ClientConnectivityManager: BaseConnectivityManager {
         availablePeers.removeAll()
     }
     
-    public func connectToServer(_ peerId: MCPeerID) {
-        serviceBrowser.invitePeer(peerId, to: session, withContext: nil, timeout: 10)
+    public func connectToServer(_ peerId: MCPeerID, handshakeRequest: ClientHandshakeRequest? = nil) throws {
+        let context = try JSONEncoder().encode(handshakeRequest)
+        
+        serviceBrowser.invitePeer(peerId, to: session, withContext: context, timeout: 10)
     }
     
     public func disconnectFromServer() {
@@ -46,15 +48,15 @@ public class ClientConnectivityManager: BaseConnectivityManager {
     
     public override func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         DispatchQueue.main.async {
-            let oldState = self.connectionState
-            let newState = state
+//            let oldState = self.connectionState
+//            let newState = state
             
-            self.connectionState = newState
+            self.connectionState = state//newState
             
-            if oldState == .notConnected && newState == .notConnected {
-                self.onServerReject?("Server rejected this client")
-                return
-            }
+//            if oldState == .notConnected && newState == .notConnected {
+//                self.onServerReject?("Server rejected this client")
+//                return
+//            }
             
             switch state {
                 case .connected:
