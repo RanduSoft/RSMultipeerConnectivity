@@ -48,15 +48,7 @@ public class ClientConnectivityManager: BaseConnectivityManager {
     
     public override func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         DispatchQueue.main.async {
-//            let oldState = self.connectionState
-//            let newState = state
-            
-            self.connectionState = state//newState
-            
-//            if oldState == .notConnected && newState == .notConnected {
-//                self.onServerReject?("Server rejected this client")
-//                return
-//            }
+            self.connectionState = state
             
             switch state {
                 case .connected:

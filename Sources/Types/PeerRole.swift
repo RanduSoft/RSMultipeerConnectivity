@@ -16,6 +16,6 @@ public extension BaseConnectivityManager {
             [PeerRole.roleKey: String(describing: self)]
         }
         
-        static var roleKey: String { "role" }
+        static var roleKey = "role"
     }
 }
