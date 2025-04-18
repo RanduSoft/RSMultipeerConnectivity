@@ -12,11 +12,11 @@ public class ServerConnectivityManager: BaseConnectivityManager {
     @Published public var connectedClients: [MCPeerID] = []
     @Published public var connectionState: MCSessionState = .notConnected
     
-    public var onPeerConnected: ((MCPeerID) -> Void)?
-    public var onPeerDisconnected: ((MCPeerID) -> Void)?
-    public var onPeerRejected: ((MCPeerID) -> Void)?
+    public var onPeerConnected: ((_ peerId: MCPeerID) -> Void)?
+    public var onPeerDisconnected: ((_ peerId: MCPeerID) -> Void)?
+    public var onPeerRejected: ((_ peerId: MCPeerID, _ reason: String?) -> Void)?
     
-    public var invitationValidator: ((MCPeerID, ClientHandshakeRequest) -> ServerHandshakeResponse)?
+    public var invitationValidator: ((_ peerId: MCPeerID, _ clientHandshakeRequest: ClientHandshakeRequest) -> ServerHandshakeResponse)?
     
     private let serviceAdvertiser: MCNearbyServiceAdvertiser
     
@@ -89,6 +89,8 @@ extension ServerConnectivityManager: MCNearbyServiceAdvertiserDelegate {
         }
         
         if serverResponse.allowed == false {
+            self.onPeerRejected?(peerID, serverResponse.reason)
+            
             try? self.kickPeer(peerID, forReason: serverResponse.reason)
             
             Logger.log("\(self.displayName) kicked \(peerID.displayName) due to \(serverResponse.reason ?? "unknown"))", type: .connection)

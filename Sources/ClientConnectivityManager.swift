@@ -12,8 +12,8 @@ public class ClientConnectivityManager: BaseConnectivityManager {
     @Published public var availablePeers: [MCPeerID] = []
     @Published public var connectionState: MCSessionState = .notConnected
     
-    public var onConnectionStateChange: ((Bool) -> Void)?
-    public var onKick: ((String?) -> Void)?
+    public var onConnectionStateChange: ((_ connectionState: Bool) -> Void)?
+    public var onKick: ((_ reason: String?) -> Void)?
     
     private let serviceBrowser: MCNearbyServiceBrowser
     
