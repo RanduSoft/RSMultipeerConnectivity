@@ -10,11 +10,9 @@ import Foundation
 public struct Config {
     let serviceType: String
     let enableLogging: Bool
-    let validClientVersions: [String]
     
-    public init(serviceType: String = "randusoft-mp", enableLogging: Bool = false, validClientVersions: [String] = []) {
+    public init(serviceType: String = "randusoft-mp", enableLogging: Bool = false) {
         self.serviceType = serviceType
         self.enableLogging = enableLogging
-        self.validClientVersions = validClientVersions
     }
 }

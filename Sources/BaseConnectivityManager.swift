@@ -12,15 +12,14 @@ public class BaseConnectivityManager: NSObject, ObservableObject {
     private let config: Config
     private let myPeerId: MCPeerID
     
-    private var onReceive: ((PeerPayload) -> Void)?
-    
     public var displayName: String {
         myPeerId.displayName
     }
     
-    public var onReceiveData: ((PeerPayload) -> Void)?
+    public var onReceive: ((_ payload: PeerPayload) -> Void)?
     
-    private var typedHandlers: [UUID: (PeerPayload) -> Void] = [:]
+    private let handlersQueue = DispatchQueue(label: "handlers")
+    private var typedHandlers: [UUID: (_ payload: PeerPayload) -> Void] = [:]
     
     let session: MCSession
     
@@ -55,8 +54,11 @@ public class BaseConnectivityManager: NSObject, ObservableObject {
     func stop() {
         fatalError("Override this method")
     }
-    
-    public func send<T: Codable>(_ object: T, toPeers peerIds: [MCPeerID]? = nil) throws {
+}
+
+// send
+public extension BaseConnectivityManager {
+    func send(_ data: Data, toPeers peerIds: [MCPeerID]? = nil) throws {
         let targets = peerIds ?? session.connectedPeers
         
         guard targets.isEmpty == false else {
@@ -64,36 +66,73 @@ public class BaseConnectivityManager: NSObject, ObservableObject {
         }
         
         do {
-            let data = try JSONEncoder().encode(object)
             try session.send(data, toPeers: targets, with: .reliable)
         } catch {
             throw ConnectivityError.sendFailed(error)
         }
     }
     
-    public func send<T: Codable>(_ object: T, toPeer peerId: MCPeerID) throws {
-        try send(object, toPeers: [peerId])
+    func send(_ object: Codable, toPeers peerIds: [MCPeerID]? = nil) throws {
+        do {
+            let data = try JSONEncoder().encode(object)
+            try send(data, toPeers: peerIds)
+        } catch {
+            throw ConnectivityError.sendFailed(error)
+        }
     }
     
+    func sendDataObject<Content: Codable>(_ object: DataObject<Content>, toPeers peerIds: [MCPeerID]? = nil) throws {
+        try send(object, toPeers: peerIds)
+    }
+
+    func sendDataObject<Content: Codable>(_ object: DataObject<Content>, toPeer peerId: MCPeerID) throws {
+        try sendDataObject(object, toPeers: [peerId])
+    }
+}
+
+// receive
+public extension BaseConnectivityManager {
     @discardableResult
-    public func receive<Content: Codable>(_ type: Content.Type = Content.self, completion: @escaping (DataObjectPayload<Content>) -> Void) -> UUID {
+    private func receiveHandler<Result>(decoder: @escaping (Data) throws -> Result, completion: @escaping (Result, MCPeerID) -> Void) -> UUID {
         let id = UUID()
+        
         let wrapper: (PeerPayload) -> Void = { payload in
             do {
-                let dataObject = try JSONDecoder().decode(DataObject<Content>.self, from: payload.data)
+                let value = try decoder(payload.data)
+                
                 DispatchQueue.main.async {
-                    completion((dataObject, payload.peerId))
+                    completion(value, payload.peerId)
                 }
             } catch {
                 Logger.log(String(describing: error), type: .error)
             }
         }
-        typedHandlers[id] = wrapper
+        
+        handlersQueue.sync {
+            typedHandlers[id] = wrapper
+        }
+        
         return id
     }
     
-    public func cancelReceive(id: UUID) {
-        typedHandlers.removeValue(forKey: id)
+    @discardableResult
+    func receive<T: Codable>(_ type: T.Type = T.self, completion: @escaping ((object: T, peerId: MCPeerID)) -> Void) -> UUID {
+        receiveHandler(
+            decoder: { try JSONDecoder().decode(T.self, from: $0) },
+            completion: { completion(($0, $1)) }
+        )
+    }
+    
+    @discardableResult
+    func receiveDataObject<Content: Codable>(_ type: Content.Type = Content.self, completion: @escaping (DataObjectPayload<Content>) -> Void) -> UUID {
+        receiveHandler(
+            decoder: { try JSONDecoder().decode(DataObject<Content>.self, from: $0) },
+            completion: { completion(($0, $1)) }
+        )
+    }
+    
+    func cancelReceiveDataObject(id: UUID) {
+        _ = handlersQueue.sync { typedHandlers.removeValue(forKey: id) }
     }
     
     private func processReceivedData(_ payload: PeerPayload) {
@@ -107,15 +146,18 @@ public class BaseConnectivityManager: NSObject, ObservableObject {
         }
         
         DispatchQueue.main.async {
-            self.onReceiveData?(payload)
+            self.onReceive?(payload)
         }
         
-        for handler in typedHandlers.values {
-            handler(payload)
+        handlersQueue.sync {
+            for handler in typedHandlers.values {
+                handler(payload)
+            }
         }
     }
 }
 
+// delegate
 extension BaseConnectivityManager: MCSessionDelegate {
     public func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
         processReceivedData((data, peerID))

@@ -18,10 +18,8 @@ public class ServerConnectivityManager: BaseConnectivityManager {
     
     public var invitationValidator: ((_ peerId: MCPeerID, _ clientHandshakeRequest: ClientHandshakeRequest) -> ServerHandshakeResponse)?
     
+    private var pendingKicks = [MCPeerID: String?]()
     private let serviceAdvertiser: MCNearbyServiceAdvertiser
-    
-    
-    private var validClientVersions: [String] = []
     
     public override init(displayName: String, config: Config = Config()) {
         let peerId = MCPeerID(displayName: displayName)
@@ -32,7 +30,6 @@ public class ServerConnectivityManager: BaseConnectivityManager {
         )
         super.init(peerId: peerId, config: config)
         serviceAdvertiser.delegate = self
-        validClientVersions = config.validClientVersions
     }
     
     public override func start() {
@@ -53,6 +50,11 @@ public class ServerConnectivityManager: BaseConnectivityManager {
                 case .connected:
                     self.connectedClients.append(peerID)
                     self.onPeerConnected?(peerID)
+                    
+                    if let kickReason = self.pendingKicks.removeValue(forKey: peerID) {
+                        try? self.kickPeer(peerID, forReason: kickReason)
+                        Logger.log("\(self.displayName) kicked \(peerID.displayName) – \(kickReason ?? "UNKNOWN")", type: .connection)
+                    }
                 case .notConnected:
                     self.connectedClients.removeAll { $0 == peerID }
                     self.onPeerDisconnected?(peerID)
@@ -64,12 +66,12 @@ public class ServerConnectivityManager: BaseConnectivityManager {
         }
     }
     
-    public func kickPeers(_ peerIds: [MCPeerID], forReason reason: String? = nil) throws {
-        try self.send(KickRequest(reason: reason), toPeers: peerIds)
-    }
-    
     public func kickPeer(_ peerId: MCPeerID, forReason reason: String? = nil) throws {
         try self.kickPeers([peerId], forReason: reason)
+    }
+    
+    public func kickPeers(_ peerIds: [MCPeerID], forReason reason: String? = nil) throws {
+        try self.send(KickRequest(reason: reason), toPeers: peerIds)
     }
 }
 
@@ -89,26 +91,8 @@ extension ServerConnectivityManager: MCNearbyServiceAdvertiserDelegate {
         }
         
         if serverResponse.allowed == false {
-            self.onPeerRejected?(peerID, serverResponse.reason)
-            
-            try? self.kickPeer(peerID, forReason: serverResponse.reason)
-            
-            Logger.log("\(self.displayName) kicked \(peerID.displayName) due to \(serverResponse.reason ?? "unknown"))", type: .connection)
+            onPeerRejected?(peerID, serverResponse.reason)
+            pendingKicks[peerID] = serverResponse.reason
         }
-    }
-}
-
-extension ServerConnectivityManager {
-    func versionFromDisplayName(_ displayName: String) -> String? {
-        let pattern = "\\[v([\\d\\.]+)\\]$"
-        
-        if let range = displayName.range(of: pattern, options: .regularExpression) {
-            let versionWithBrackets = displayName[range]
-            let startIndex = versionWithBrackets.index(versionWithBrackets.startIndex, offsetBy: 2)
-            let endIndex = versionWithBrackets.index(versionWithBrackets.endIndex, offsetBy: -1)
-            return String(versionWithBrackets[startIndex..<endIndex])
-        }
-        
-        return nil
     }
 }

@@ -55,7 +55,7 @@ public struct DebugView<Content: Codable>: View {
                     Logger.log("Got kicked with reason: \(reason ?? "none")", type: .connection, function: "onKick")
                 }
             }
-            manager.receive(Content.self) { peerPayload in
+            manager.receiveDataObject(Content.self) { peerPayload in
                 Logger.log("Received data from \(peerPayload.peerId.displayName)", type: .info, function: "receive")
                 self.receivedObject = peerPayload.dataObject
             }
