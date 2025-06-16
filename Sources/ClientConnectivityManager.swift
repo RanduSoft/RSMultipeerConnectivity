@@ -16,6 +16,7 @@ public class ClientConnectivityManager: BaseConnectivityManager {
     public var onKick: ((_ reason: String?) -> Void)?
     
     private let serviceBrowser: MCNearbyServiceBrowser
+    private var serverPeerId: MCPeerID?
     
     public override init(displayName: String, config: Config = Config()) {
         let peerId = MCPeerID(displayName: displayName)
@@ -39,6 +40,8 @@ public class ClientConnectivityManager: BaseConnectivityManager {
     public func connectToServer(_ peerId: MCPeerID, handshakeRequest: ClientHandshakeRequest? = nil) throws {
         let context = try JSONEncoder().encode(handshakeRequest)
         
+        serverPeerId = peerId
+        
         serviceBrowser.invitePeer(peerId, to: session, withContext: context, timeout: 10)
     }
     
@@ -47,6 +50,10 @@ public class ClientConnectivityManager: BaseConnectivityManager {
     }
     
     public override func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
+        guard peerID == serverPeerId else {
+            return
+        }
+        
         DispatchQueue.main.async {
             self.connectionState = state
             
